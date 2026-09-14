@@ -44,21 +44,32 @@ async function handleStripeWebhook(request: Request, env: Env, ctx: ExecutionCon
   await verifyStripeWebhook(raw, request.headers.get('stripe-signature'), env.STRIPE_WEBHOOK_SECRET);
   const event = JSON.parse(raw) as Record<string, any>;
   const eventId = String(event.id || randomId('stripe_evt'));
-  const existing = await env.COMMERCE_DB.prepare('SELECT id FROM webhook_events WHERE provider = ? AND provider_event_id = ?').bind('stripe', eventId).first();
-  if (existing) return json({ received: true });
-  await env.COMMERCE_DB.prepare(`INSERT INTO webhook_events (id, provider, provider_event_id, event_type, payload_json, received_at) VALUES (?, 'stripe', ?, ?, ?, ?)`)
-    .bind(randomId('evt'), eventId, String(event.type || ''), raw, new Date().toISOString()).run();
-  if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
-    const session = event.data?.object || {}; const orderId = String(session.client_reference_id || session.metadata?.order_id || '');
-    if (orderId) {
-      const tax = Number(session.total_details?.amount_tax || 0); const total = Number(session.amount_total || 0);
-      await env.COMMERCE_DB.prepare(`UPDATE orders SET status='paid', payment_status='paid', tax_total=?, grand_total=?, stripe_payment_intent_id=?, updated_at=? WHERE id=? AND payment_status <> 'paid'`)
-        .bind(tax, total, session.payment_intent ? String(session.payment_intent) : null, new Date().toISOString(), orderId).run();
-      ctx.waitUntil(env.FULFILLMENT_QUEUE.send({ type: 'FULFILL_ORDER', orderId }));
+  const existing = await env.COMMERCE_DB.prepare('SELECT id, processed_at FROM webhook_events WHERE provider = ? AND provider_event_id = ?').bind('stripe', eventId).first<{ id: string; processed_at: string | null }>();
+  if (existing?.processed_at) return json({ received: true });
+  const ledgerId = existing?.id || randomId('evt');
+  if (!existing) {
+    await env.COMMERCE_DB.prepare(`INSERT INTO webhook_events (id, provider, provider_event_id, event_type, payload_json, received_at) VALUES (?, 'stripe', ?, ?, ?, ?)` )
+      .bind(ledgerId, eventId, String(event.type || ''), raw, new Date().toISOString()).run();
+  }
+  try {
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+      const session = event.data?.object || {};
+      const isPaid = event.type === 'checkout.session.async_payment_succeeded' || session.payment_status === 'paid';
+      const orderId = String(session.client_reference_id || session.metadata?.order_id || '');
+      if (orderId && isPaid) {
+        const tax = Number(session.total_details?.amount_tax || 0); const total = Number(session.amount_total || 0);
+        await env.COMMERCE_DB.prepare(`UPDATE orders SET status='paid', payment_status='paid', tax_total=?, grand_total=?, stripe_payment_intent_id=?, updated_at=? WHERE id=? AND payment_status <> 'paid'`)
+          .bind(tax, total, session.payment_intent ? String(session.payment_intent) : null, new Date().toISOString(), orderId).run();
+        ctx.waitUntil(env.FULFILLMENT_QUEUE.send({ type: 'FULFILL_ORDER', orderId }));
+      }
+    } else if (event.type === 'checkout.session.async_payment_failed') {
+      const session = event.data?.object || {}; const orderId = String(session.client_reference_id || session.metadata?.order_id || '');
+      if (orderId) await env.COMMERCE_DB.prepare(`UPDATE orders SET status='payment_failed', payment_status='failed', updated_at=? WHERE id=?`).bind(new Date().toISOString(), orderId).run();
     }
-  } else if (event.type === 'checkout.session.async_payment_failed' || event.type === 'payment_intent.payment_failed') {
-    const session = event.data?.object || {}; const orderId = String(session.client_reference_id || session.metadata?.order_id || '');
-    if (orderId) await env.COMMERCE_DB.prepare(`UPDATE orders SET status='payment_failed', payment_status='failed', updated_at=? WHERE id=?`).bind(new Date().toISOString(), orderId).run();
+    await env.COMMERCE_DB.prepare('UPDATE webhook_events SET processed_at = ?, last_error = NULL WHERE id = ?').bind(new Date().toISOString(), ledgerId).run();
+  } catch (error) {
+    await env.COMMERCE_DB.prepare('UPDATE webhook_events SET last_error = ? WHERE id = ?').bind(String(error), ledgerId).run();
+    throw error;
   }
   return json({ received: true });
 }

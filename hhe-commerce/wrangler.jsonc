@@ -7,7 +7,7 @@
   "vars": {
     "ALLOWED_ORIGINS": "https://hellharbor.com,https://www.hellharbor.com,https://new.hellharbor.com",
     "CURRENCY": "usd",
-    "QUOTE_TTL_MINUTES": "20",
+    "QUOTE_TTL_MINUTES": "45",
     "SPREADCONNECT_BASE_URL": "https://rest.spreadconnect-staging.app",
     "KUNAKI_BASE_URL": "https://kunaki.com/HTTPService.ASP",
     "KUNAKI_MODE": "TEST"

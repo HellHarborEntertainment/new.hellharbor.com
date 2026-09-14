@@ -31,6 +31,7 @@ export async function fulfillOrder(env: Env, orderId: string): Promise<void> {
   for (const [providerName, groupItems] of groups) {
     const existing = await env.COMMERCE_DB.prepare('SELECT * FROM fulfillment_groups WHERE order_id = ? AND provider = ?').bind(order.id, providerName).first<Record<string, unknown>>();
     if (existing?.provider_order_id) continue;
+    if (providerName === 'kunaki' && existing?.status === 'exception') continue;
     const groupId = existing?.id ? String(existing.id) : randomId('fg');
     if (!existing) {
       await env.COMMERCE_DB.prepare(`INSERT INTO fulfillment_groups (id, order_id, provider, status, created_at, updated_at) VALUES (?, ?, ?, 'queued', ?, ?)`)
@@ -41,13 +42,17 @@ export async function fulfillOrder(env: Env, orderId: string): Promise<void> {
     const pq = providerQuotes.find(q => q.provider === providerName);
     const shippingSelection = selected.providerSelections[providerName];
     if (!shippingSelection) throw new Error(`Provider shipping selection missing for ${providerName}`);
+    await env.COMMERCE_DB.prepare(`UPDATE fulfillment_groups SET status = 'submitting', updated_at = ? WHERE id = ?`).bind(new Date().toISOString(), groupId).run();
     try {
       const result = await getProvider(providerName as CatalogItem['provider']).fulfill(env, { orderId: order.id, orderNumber: order.order_number, items: groupItems, address, contact, shippingSelection, draftOrderId: pq?.draftOrderId });
       await env.COMMERCE_DB.prepare(`UPDATE fulfillment_groups SET provider_order_id = ?, status = ?, shipping_method = ?, shipping_cost = ?, submitted_at = ?, updated_at = ? WHERE id = ?`)
         .bind(result.providerOrderId, normalizeProviderStatus(result.status), shippingSelection.name, shippingSelection.price, new Date().toISOString(), new Date().toISOString(), groupId).run();
     } catch (error) {
-      await env.COMMERCE_DB.prepare(`UPDATE fulfillment_groups SET status = 'exception', last_error = ?, updated_at = ? WHERE id = ?`).bind(String(error), new Date().toISOString(), groupId).run();
-      throw error;
+      const note = providerName === 'kunaki'
+        ? `Kunaki submission outcome requires manual review before retry: ${String(error)}`
+        : String(error);
+      await env.COMMERCE_DB.prepare(`UPDATE fulfillment_groups SET status = 'exception', last_error = ?, updated_at = ? WHERE id = ?`).bind(note, new Date().toISOString(), groupId).run();
+      if (providerName !== 'kunaki') throw error;
     }
   }
   await recomputeOrderFulfillmentStatus(env, order.id);
@@ -85,7 +90,7 @@ export async function recomputeOrderFulfillmentStatus(env: Env, orderId: string)
   else if (statuses.every(s => s === 'shipped')) status = 'shipped';
   else if (statuses.some(s => s === 'shipped')) status = 'partially_shipped';
   else if (statuses.some(s => s === 'processing')) status = 'processing';
-  else if (statuses.some(s => s === 'submitted')) status = 'submitted';
+  else if (statuses.some(s => s === 'submitted' || s === 'submitting')) status = 'submitted';
   else if (statuses.some(s => s === 'queued')) status = 'queued';
   await env.COMMERCE_DB.prepare('UPDATE orders SET fulfillment_status = ?, updated_at = ? WHERE id = ?').bind(status, new Date().toISOString(), orderId).run();
 }

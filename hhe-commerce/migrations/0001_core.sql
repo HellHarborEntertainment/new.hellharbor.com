@@ -130,5 +130,7 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   event_type TEXT,
   payload_json TEXT NOT NULL,
   received_at TEXT NOT NULL,
+  processed_at TEXT,
+  last_error TEXT,
   UNIQUE(provider, provider_event_id)
 );

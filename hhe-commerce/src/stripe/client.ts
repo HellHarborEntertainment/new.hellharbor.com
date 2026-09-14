@@ -5,6 +5,7 @@ export interface CheckoutLine { name: string; sku: string; unitAmount: number; q
 export interface CheckoutCreateInput {
   orderId: string; orderNumber: string; publicToken: string; email: string; lines: CheckoutLine[];
   shipping: { name: string; amount: number; currency: string; minDays?: number; maxDays?: number };
+  expiresAtEpoch?: number;
 }
 
 export async function createStripeCheckout(env: Env, input: CheckoutCreateInput): Promise<{ id: string; url?: string }> {
@@ -15,6 +16,7 @@ export async function createStripeCheckout(env: Env, input: CheckoutCreateInput)
   p.set('success_url', `${env.STRIPE_SUCCESS_URL}${env.STRIPE_SUCCESS_URL.includes('?') ? '&' : '?'}order=${encodeURIComponent(input.orderNumber)}&token=${encodeURIComponent(input.publicToken)}&session_id={CHECKOUT_SESSION_ID}`);
   p.set('cancel_url', env.STRIPE_CANCEL_URL);
   p.set('automatic_tax[enabled]', 'true');
+  if (input.expiresAtEpoch) p.set('expires_at', String(input.expiresAtEpoch));
   p.set('metadata[order_id]', input.orderId);
   p.set('metadata[order_number]', input.orderNumber);
   input.lines.forEach((line, i) => {

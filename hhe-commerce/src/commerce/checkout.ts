@@ -36,7 +36,8 @@ export async function createCheckout(env: Env, quoteId: string, optionId: string
   const session = await createStripeCheckout(env, {
     orderId: id, orderNumber: number, publicToken: token, email: contact.email,
     lines: items.map(i => ({ name: `${i.productName}${i.variantName ? ` - ${i.variantName}` : ''}`, sku: i.sku, unitAmount: i.unitPrice, quantity: i.quantity, currency: i.currency })),
-    shipping: { name: selected.name, amount: selected.price, currency: selected.currency, minDays: selected.minDays, maxDays: selected.maxDays }
+    shipping: { name: selected.name, amount: selected.price, currency: selected.currency, minDays: selected.minDays, maxDays: selected.maxDays },
+    expiresAtEpoch: Math.floor(Date.parse(quote.expires_at) / 1000)
   });
   await env.COMMERCE_DB.prepare(`UPDATE orders SET stripe_checkout_session_id = ?, updated_at = ? WHERE id = ?`).bind(session.id, new Date().toISOString(), id).run();
   await env.COMMERCE_DB.prepare(`UPDATE shipping_quotes SET status = 'reserved', selected_option_id = ?, order_id = ? WHERE id = ? AND status = 'open'`).bind(selected.id, id, quoteId).run();
