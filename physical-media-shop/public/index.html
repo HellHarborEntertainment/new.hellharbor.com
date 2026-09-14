@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Official Hell Harbor Entertainment physical media shop.">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Hell Harbor Entertainment | Physical Media</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">HELL HARBOR ENTERTAINMENT</p>
+      <h1>Physical Media</h1>
+      <p class="lede">Direct-to-fan CDs, cassettes, vinyl and other limited physical releases.</p>
+    </div>
+    <a class="ghost-link" href="https://hellharbor.com">Back to HellHarbor.com</a>
+  </header>
+
+  <main>
+    <section class="notice"><strong>Manufactured on demand.</strong> Available titles are produced and drop-shipped through Hell Harbor Entertainment's manufacturing partner after payment is confirmed.</section>
+    <section>
+      <div class="section-heading">
+        <div><p class="eyebrow">CATALOG</p><h2>Available releases</h2></div>
+        <button id="cart-toggle" class="button secondary" type="button">Cart <span id="cart-count">0</span></button>
+      </div>
+      <div id="catalog" class="product-grid" aria-live="polite"></div>
+    </section>
+
+    <section id="cart-panel" class="cart-panel" hidden>
+      <div class="section-heading">
+        <div><p class="eyebrow">ORDER</p><h2>Your cart</h2></div>
+        <button id="cart-close" class="icon-button" type="button" aria-label="Close cart">×</button>
+      </div>
+      <div id="cart-lines"></div>
+      <div class="total-row"><span>Merchandise subtotal</span><strong id="cart-subtotal">$0.00</strong></div>
+      <form id="shipping-form" class="checkout-form">
+        <h3>Get live shipping rates</h3>
+        <p class="muted">Kunaki calculates shipping from your destination and the exact products in your cart.</p>
+        <div class="form-grid">
+          <label>Country<select id="country" name="countryCode" required></select></label>
+          <label>State / Province<input id="state" name="stateProvince" maxlength="2" placeholder="WA" autocomplete="address-level1"></label>
+          <label>Postal code<input id="postal" name="postalCode" maxlength="20" placeholder="98520" autocomplete="postal-code" required></label>
+        </div>
+        <button class="button" type="submit">Calculate shipping</button>
+      </form>
+      <div id="shipping-options" class="shipping-options"></div>
+      <div id="grand-total" class="total-row grand" hidden><span>Estimated total before tax</span><strong>$0.00</strong></div>
+      <button id="checkout-button" class="button checkout" type="button" disabled>Secure checkout with Stripe</button>
+      <p class="security-note">Payment card details are entered on Stripe's secure checkout and are never sent to or stored by Hell Harbor Entertainment's storefront code.</p>
+      <div id="cart-message" class="message" role="status" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer><p>© Hell Harbor Entertainment. Physical media availability and shipping options are calculated at checkout.</p></footer>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
