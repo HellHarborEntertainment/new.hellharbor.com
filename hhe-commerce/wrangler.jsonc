@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hhe-commerce",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-14",
+  "workers_dev": true,
+  "vars": {
+    "ALLOWED_ORIGINS": "https://hellharbor.com,https://www.hellharbor.com,https://new.hellharbor.com",
+    "CURRENCY": "usd",
+    "QUOTE_TTL_MINUTES": "20",
+    "SPREADCONNECT_BASE_URL": "https://rest.spreadconnect-staging.app",
+    "KUNAKI_BASE_URL": "https://kunaki.com/HTTPService.ASP",
+    "KUNAKI_MODE": "TEST"
+  },
+  "d1_databases": [
+    {
+      "binding": "COMMERCE_DB",
+      "database_name": "hhe-commerce",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "FULFILLMENT_QUEUE", "queue": "hhe-commerce-fulfillment" }
+    ],
+    "consumers": [
+      {
+        "queue": "hhe-commerce-fulfillment",
+        "max_batch_size": 5,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "hhe-commerce-fulfillment-dlq"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": ["17 * * * *"]
+  }
+}
