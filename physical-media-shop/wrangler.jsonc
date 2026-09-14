@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "hell-harbor-media-shop",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-14",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "PUBLIC_ORIGIN": "https://shop.hellharbor.com",
+    "KUNAKI_MODE": "Test",
+    "STRIPE_AUTOMATIC_TAX": "false",
+    "ALLOWED_SHIPPING_COUNTRIES": "US,CA"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hell-harbor-media-shop",
+      "database_id": "TBD"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/30 * * * *"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}
