@@ -7,15 +7,19 @@
   "vars": {
     "ALLOWED_ORIGINS": "https://hellharbor.com,https://www.hellharbor.com,https://new.hellharbor.com",
     "CURRENCY": "usd",
-    "QUOTE_TTL_MINUTES": "45",
+    "QUOTE_TTL_MINUTES": "60",
     "STRIPE_ALLOWED_SHIPPING_COUNTRIES": "US,CA",
     "SPREADCONNECT_BASE_URL": "https://rest.spreadconnect-staging.app",
-    "KUNAKI_BASE_URL": "https://kunaki.com/HTTPService.ASP",
+    "KUNAKI_XML_BASE_URL": "https://kunaki.com/XMLService.ASP",
     "KUNAKI_MODE": "TEST",
     "FREE_SHIPPING_THRESHOLD_CENTS": "0",
     "SHIPPING_SUBSIDY_CENTS": "0",
     "SHIPPING_MARKUP_BPS": "0",
-    "MIN_SHIPPING_CHARGE_CENTS": "0"
+    "MIN_SHIPPING_CHARGE_CENTS": "0",
+    "REQUIRE_TURNSTILE": "false",
+    "TURNSTILE_EXPECTED_HOSTNAMES": "hellharbor.com,www.hellharbor.com,new.hellharbor.com",
+    "UNPAID_PII_RETENTION_DAYS": "7",
+    "CUSTOMER_PII_RETENTION_DAYS": "365"
   },
   "d1_databases": [{ "binding": "COMMERCE_DB", "database_name": "hhe-commerce", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "migrations" }],
   "ratelimits": [
