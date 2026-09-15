@@ -23,8 +23,18 @@ class D1Mock {
   prepare(sql) { return new Statement(this.db, sql); }
   async batch(statements) {
     this.db.exec('BEGIN');
-    try { const out = []; for (const statement of statements) out.push(await statement.run()); this.db.exec('COMMIT'); return out; }
-    catch (error) { this.db.exec('ROLLBACK'); throw error; }
+    try {
+      const out = [];
+      for (const statement of statements) {
+        const result = this.db.prepare(statement.sql).run(...statement.values);
+        out.push({ success: true, meta: { changes: Number(result.changes) } });
+      }
+      this.db.exec('COMMIT');
+      return out;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 }
 
