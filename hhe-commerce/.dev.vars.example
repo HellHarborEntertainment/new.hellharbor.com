@@ -1,0 +1,11 @@
+STRIPE_SECRET_KEY=sk_test_replace_me
+STRIPE_WEBHOOK_SECRET=whsec_replace_me
+STRIPE_SUCCESS_URL=https://example.com/shop/success
+STRIPE_CANCEL_URL=https://example.com/shop/cart
+SPREADCONNECT_ACCESS_TOKEN=replace_me
+SPREADCONNECT_WEBHOOK_SECRET=replace_with_subscription_secret
+KUNAKI_USER_ID=replace_me
+KUNAKI_PASSWORD=replace_me
+TURNSTILE_SECRET_KEY=replace_when_REQUIRE_TURNSTILE_is_true
+ADMIN_API_KEY=replace_with_at_least_32_random_characters
+ORDER_ACCESS_SECRET=replace_with_at_least_32_random_characters

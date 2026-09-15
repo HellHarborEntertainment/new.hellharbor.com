@@ -1,0 +1,36 @@
+name: HHE Commerce Backend
+
+on:
+  pull_request:
+    paths:
+      - 'hhe-commerce/**'
+      - '.github/workflows/hhe-commerce.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'hhe-commerce/**'
+      - '.github/workflows/hhe-commerce.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hhe-commerce
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: hhe-commerce/package.json
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck and test
+        run: npm test
