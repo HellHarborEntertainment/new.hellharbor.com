@@ -20,6 +20,7 @@ export interface Env {
   KUNAKI_PASSWORD: string;
   KUNAKI_MODE: 'TEST' | 'LIVE';
   KUNAKI_BASE_URL: string;
+  KUNAKI_XML_BASE_URL?: string;
   ALLOWED_ORIGINS: string;
   CURRENCY: string;
   QUOTE_TTL_MINUTES: string;
@@ -28,6 +29,11 @@ export interface Env {
   SHIPPING_SUBSIDY_CENTS?: string;
   SHIPPING_MARKUP_BPS?: string;
   MIN_SHIPPING_CHARGE_CENTS?: string;
+  REQUIRE_TURNSTILE?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  TURNSTILE_EXPECTED_HOSTNAMES?: string;
+  CUSTOMER_PII_RETENTION_DAYS?: string;
+  UNPAID_PII_RETENTION_DAYS?: string;
 }
 
 export interface Address {
