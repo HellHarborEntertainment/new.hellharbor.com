@@ -5,7 +5,6 @@ export interface CheckoutLine { name: string; sku: string; unitAmount: number; q
 export interface CheckoutCreateInput {
   orderId: string;
   orderNumber: string;
-  publicToken: string;
   email: string;
   address: Address;
   lines: CheckoutLine[];
@@ -55,14 +54,25 @@ export async function createStripeCheckout(env: Env, input: CheckoutCreateInput)
 
   const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',
-    headers: {
-      authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
-      'content-type': 'application/x-www-form-urlencoded',
-      'Idempotency-Key': `hhe-checkout-${input.orderId}`
-    },
+    headers: { authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, 'content-type': 'application/x-www-form-urlencoded', 'Idempotency-Key': `hhe-checkout-${input.orderId}` },
     body: params.toString()
   });
   const body = await response.json() as Record<string, unknown>;
   if (!response.ok) throw upstream('Stripe Checkout session creation failed', body);
   return { id: String(body.id), url: body.url ? String(body.url) : undefined };
+}
+
+export async function expireStripeCheckout(env: Env, sessionId: string): Promise<void> {
+  if (!sessionId) return;
+  const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}/expire`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, 'content-type': 'application/x-www-form-urlencoded', 'Idempotency-Key': `hhe-expire-${sessionId}` },
+    body: ''
+  });
+  if (response.ok) return;
+  let body: unknown;
+  try { body = await response.json(); } catch { body = undefined; }
+  // A session that is already complete or expired cannot be expired again. Reconciliation/webhooks remain authoritative.
+  if (response.status === 400) throw upstream('Stripe Checkout Session could not be expired safely', body);
+  throw upstream('Stripe Checkout Session expiration failed', body);
 }
