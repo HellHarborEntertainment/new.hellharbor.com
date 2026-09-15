@@ -8,3 +8,4 @@ KUNAKI_USER_ID=replace_me
 KUNAKI_PASSWORD=replace_me
 TURNSTILE_SECRET_KEY=replace_when_REQUIRE_TURNSTILE_is_true
 ADMIN_API_KEY=replace_with_at_least_32_random_characters
+ORDER_ACCESS_SECRET=replace_with_at_least_32_random_characters
