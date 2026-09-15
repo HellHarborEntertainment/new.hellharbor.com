@@ -16,3 +16,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_payment_intent_unique
 
 ALTER TABLE orders ADD COLUMN pii_redacted_at TEXT;
 ALTER TABLE shipping_quotes ADD COLUMN pii_redacted_at TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_orders_pii_retention
+  ON orders(pii_redacted_at, payment_status, status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_quotes_pii_retention
+  ON shipping_quotes(pii_redacted_at, status, created_at);
