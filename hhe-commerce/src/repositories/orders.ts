@@ -1,110 +1,21 @@
 import type { CatalogItem, Env } from '../types.js';
 import { notFound, unauthorized } from '../lib/errors.js';
-import { safeEqual } from '../lib/crypto.js';
+import { safeEqual, sha256Hex } from '../lib/crypto.js';
 
-export interface OrderRow {
-  id: string;
-  order_number: string;
-  public_token: string;
-  customer_email: string;
-  customer_phone: string;
-  status: string;
-  payment_status: string;
-  fulfillment_status: string;
-  currency: string;
-  subtotal: number;
-  shipping_total: number;
-  tax_total: number;
-  grand_total: number;
-  shipping_quote_id: string;
-  shipping_option_id: string;
-  address_json: string;
-  stripe_checkout_session_id: string | null;
-  stripe_payment_intent_id?: string | null;
-  exception_code?: string | null;
-  exception_detail?: string | null;
-  refund_status?: string;
-  refunded_total?: number;
-  created_at?: string;
-  updated_at?: string;
+export interface OrderRow { id:string;order_number:string;public_token:string;customer_email:string;customer_phone:string;status:string;payment_status:string;fulfillment_status:string;currency:string;subtotal:number;shipping_total:number;tax_total:number;grand_total:number;shipping_quote_id:string;shipping_option_id:string;address_json:string;stripe_checkout_session_id:string|null;stripe_payment_intent_id?:string|null;exception_code?:string|null;exception_detail?:string|null;refund_status?:string;refunded_total?:number;created_at?:string;updated_at?:string; }
+export async function getOrder(env:Env,id:string):Promise<OrderRow>{const order=await env.COMMERCE_DB.prepare('SELECT * FROM orders WHERE id=?').bind(id).first<OrderRow>();if(!order)throw notFound('Order not found');return order;}
+async function validPublicToken(stored:string,supplied:string):Promise<boolean>{if(!supplied)return false;const hashed=await sha256Hex(supplied);return /^[a-f0-9]{64}$/i.test(stored)?safeEqual(hashed,stored.toLowerCase()):safeEqual(supplied,stored);}
+
+export async function getPublicOrder(env:Env,orderNumber:string,token:string){
+ const order=await env.COMMERCE_DB.prepare('SELECT * FROM orders WHERE order_number=?').bind(orderNumber).first<OrderRow>();if(!order)throw notFound('Order not found');if(!(await validPublicToken(order.public_token,token)))throw unauthorized('Invalid order token');
+ const items=await env.COMMERCE_DB.prepare('SELECT sku,name,quantity,unit_price FROM order_items WHERE order_id=? ORDER BY rowid').bind(order.id).all<{sku:string;name:string;quantity:number;unit_price:number}>();
+ const groups=await env.COMMERCE_DB.prepare('SELECT id,status,shipping_method,submitted_at,shipped_at,delivered_at FROM fulfillment_groups WHERE order_id=? ORDER BY created_at').bind(order.id).all<{id:string;status:string;shipping_method:string|null;submitted_at:string|null;shipped_at:string|null;delivered_at:string|null}>();
+ const groupItems=await env.COMMERCE_DB.prepare(`SELECT fgi.fulfillment_group_id,oi.sku,oi.name,oi.quantity FROM fulfillment_group_items fgi JOIN order_items oi ON oi.id=fgi.order_item_id JOIN fulfillment_groups fg ON fg.id=fgi.fulfillment_group_id WHERE fg.order_id=? ORDER BY oi.rowid`).bind(order.id).all<{fulfillment_group_id:string;sku:string;name:string;quantity:number}>();
+ const shipments=await env.COMMERCE_DB.prepare('SELECT fulfillment_group_id,carrier,tracking_number,tracking_url,status,shipped_at,delivered_at FROM shipments WHERE order_id=? ORDER BY created_at').bind(order.id).all<{fulfillment_group_id:string;carrier:string|null;tracking_number:string|null;tracking_url:string|null;status:string;shipped_at:string|null;delivered_at:string|null}>();
+ const packages=(groups.results||[]).map((group,index)=>({packageId:`package-${index+1}`,status:group.status,shippingMethod:group.shipping_method||undefined,submittedAt:group.submitted_at||undefined,shippedAt:group.shipped_at||undefined,deliveredAt:group.delivered_at||undefined,items:(groupItems.results||[]).filter(item=>item.fulfillment_group_id===group.id).map(item=>({sku:item.sku,name:item.name,quantity:item.quantity})),shipments:(shipments.results||[]).filter(shipment=>shipment.fulfillment_group_id===group.id).map(shipment=>({carrier:shipment.carrier||undefined,trackingNumber:shipment.tracking_number||undefined,trackingUrl:shipment.tracking_url||undefined,status:shipment.status,shippedAt:shipment.shipped_at||undefined,deliveredAt:shipment.delivered_at||undefined}))}));
+ return{order:{orderNumber:order.order_number,status:order.status,paymentStatus:order.payment_status,fulfillmentStatus:order.fulfillment_status,currency:order.currency,subtotal:order.subtotal,shipping:order.shipping_total,tax:order.tax_total,total:order.grand_total,refundStatus:order.refund_status||'none',refundedTotal:order.refunded_total||0,needsAttention:order.status==='exception'||order.fulfillment_status==='exception'},items:items.results||[],packages};
 }
 
-export async function getOrder(env: Env, id: string): Promise<OrderRow> {
-  const order = await env.COMMERCE_DB.prepare(`SELECT * FROM orders WHERE id=?`).bind(id).first<OrderRow>();
-  if (!order) throw notFound('Order not found');
-  return order;
-}
-
-export async function getPublicOrder(env: Env, orderNumber: string, token: string) {
-  const order = await env.COMMERCE_DB.prepare(`SELECT * FROM orders WHERE order_number=?`).bind(orderNumber).first<OrderRow>();
-  if (!order) throw notFound('Order not found');
-  if (!token || !safeEqual(token, order.public_token)) throw unauthorized('Invalid order token');
-  const items = await env.COMMERCE_DB.prepare(`SELECT sku,name,quantity,unit_price,provider FROM order_items WHERE order_id=? ORDER BY rowid`).bind(order.id).all();
-  const groups = await env.COMMERCE_DB.prepare(`SELECT id,provider,status,shipping_method,shipping_cost,submitted_at,shipped_at,delivered_at FROM fulfillment_groups WHERE order_id=? ORDER BY created_at`).bind(order.id).all();
-  const shipments = await env.COMMERCE_DB.prepare(`SELECT fulfillment_group_id,provider,carrier,tracking_number,tracking_url,status,shipped_at,delivered_at FROM shipments WHERE order_id=? ORDER BY created_at`).bind(order.id).all();
-  return {
-    order: {
-      orderNumber: order.order_number,
-      status: order.status,
-      paymentStatus: order.payment_status,
-      fulfillmentStatus: order.fulfillment_status,
-      currency: order.currency,
-      subtotal: order.subtotal,
-      shipping: order.shipping_total,
-      tax: order.tax_total,
-      total: order.grand_total,
-      refundStatus: order.refund_status || 'none',
-      refundedTotal: order.refunded_total || 0,
-      exceptionCode: order.exception_code || undefined
-    },
-    items: items.results || [],
-    fulfillments: groups.results || [],
-    shipments: shipments.results || []
-  };
-}
-
-export async function orderItems(env: Env, orderId: string): Promise<CatalogItem[]> {
-  const rows = await env.COMMERCE_DB.prepare(`
-    SELECT oi.*,p.currency FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id=?
-  `).bind(orderId).all<Record<string, unknown>>();
-  return (rows.results || []).map(row => ({
-    productId: String(row.product_id),
-    variantId: String(row.variant_id),
-    sku: String(row.sku),
-    productName: String(row.name),
-    provider: String(row.provider) as CatalogItem['provider'],
-    providerProductId: row.provider_product_id ? String(row.provider_product_id) : undefined,
-    providerSku: row.provider_sku ? String(row.provider_sku) : undefined,
-    unitPrice: Number(row.unit_price),
-    currency: String(row.currency),
-    quantity: Number(row.quantity)
-  }));
-}
-
-export async function listAdminOrders(env: Env, args: { status?: string; provider?: string; limit?: number; cursor?: string }) {
-  const limit = Math.min(100, Math.max(1, args.limit || 50));
-  const clauses: string[] = [];
-  const binds: unknown[] = [];
-  if (args.status) { clauses.push('(o.status=? OR o.fulfillment_status=?)'); binds.push(args.status, args.status); }
-  if (args.provider) { clauses.push('EXISTS (SELECT 1 FROM fulfillment_groups fg WHERE fg.order_id=o.id AND fg.provider=?)'); binds.push(args.provider); }
-  if (args.cursor) { clauses.push('o.created_at < ?'); binds.push(args.cursor); }
-  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-  const result = await env.COMMERCE_DB.prepare(`
-    SELECT o.id,o.order_number,o.customer_email,o.status,o.payment_status,o.fulfillment_status,o.currency,o.grand_total,o.exception_code,o.created_at,o.updated_at
-    FROM orders o ${where} ORDER BY o.created_at DESC LIMIT ?
-  `).bind(...binds, limit + 1).all<Record<string, unknown>>();
-  const rows = result.results || [];
-  const more = rows.length > limit;
-  const orders = more ? rows.slice(0, limit) : rows;
-  return { orders, nextCursor: more ? String(orders[orders.length - 1]?.created_at || '') : null };
-}
-
-export async function getAdminOrder(env: Env, id: string) {
-  const order = await getOrder(env, id);
-  const items = await env.COMMERCE_DB.prepare(`SELECT * FROM order_items WHERE order_id=? ORDER BY rowid`).bind(id).all();
-  const groups = await env.COMMERCE_DB.prepare(`SELECT * FROM fulfillment_groups WHERE order_id=? ORDER BY created_at`).bind(id).all();
-  const shipments = await env.COMMERCE_DB.prepare(`SELECT * FROM shipments WHERE order_id=? ORDER BY created_at`).bind(id).all();
-  const attempts = await env.COMMERCE_DB.prepare(`SELECT * FROM fulfillment_attempts WHERE order_id=? ORDER BY created_at DESC LIMIT 100`).bind(id).all();
-  const refunds = await env.COMMERCE_DB.prepare(`SELECT * FROM refunds WHERE order_id=? ORDER BY created_at DESC`).bind(id).all();
-  return { order, items: items.results || [], fulfillments: groups.results || [], shipments: shipments.results || [], attempts: attempts.results || [], refunds: refunds.results || [] };
-}
+export async function orderItems(env:Env,orderId:string):Promise<CatalogItem[]>{const rows=await env.COMMERCE_DB.prepare('SELECT oi.*,p.currency FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id=?').bind(orderId).all<Record<string,unknown>>();return(rows.results||[]).map(row=>({productId:String(row.product_id),variantId:String(row.variant_id),sku:String(row.sku),productName:String(row.name),provider:String(row.provider) as CatalogItem['provider'],providerProductId:row.provider_product_id?String(row.provider_product_id):undefined,providerSku:row.provider_sku?String(row.provider_sku):undefined,unitPrice:Number(row.unit_price),currency:String(row.currency),quantity:Number(row.quantity)}));}
+export async function listAdminOrders(env:Env,args:{status?:string;provider?:string;limit?:number;cursor?:string}){const limit=Math.min(100,Math.max(1,args.limit||50));const clauses:string[]=[];const binds:unknown[]=[];if(args.status){clauses.push('(o.status=? OR o.fulfillment_status=?)');binds.push(args.status,args.status);}if(args.provider){clauses.push('EXISTS (SELECT 1 FROM fulfillment_groups fg WHERE fg.order_id=o.id AND fg.provider=?)');binds.push(args.provider);}if(args.cursor){clauses.push('o.created_at < ?');binds.push(args.cursor);}const where=clauses.length?`WHERE ${clauses.join(' AND ')}`:'';const result=await env.COMMERCE_DB.prepare(`SELECT o.id,o.order_number,o.customer_email,o.status,o.payment_status,o.fulfillment_status,o.currency,o.grand_total,o.exception_code,o.created_at,o.updated_at FROM orders o ${where} ORDER BY o.created_at DESC LIMIT ?`).bind(...binds,limit+1).all<Record<string,unknown>>();const rows=result.results||[];const more=rows.length>limit;const orders=more?rows.slice(0,limit):rows;return{orders,nextCursor:more?String(orders[orders.length-1]?.created_at||''):null};}
+export async function getAdminOrder(env:Env,id:string){const order=await getOrder(env,id);const items=await env.COMMERCE_DB.prepare('SELECT * FROM order_items WHERE order_id=? ORDER BY rowid').bind(id).all();const groups=await env.COMMERCE_DB.prepare('SELECT * FROM fulfillment_groups WHERE order_id=? ORDER BY created_at').bind(id).all();const shipments=await env.COMMERCE_DB.prepare('SELECT * FROM shipments WHERE order_id=? ORDER BY created_at').bind(id).all();const attempts=await env.COMMERCE_DB.prepare('SELECT * FROM fulfillment_attempts WHERE order_id=? ORDER BY created_at DESC LIMIT 100').bind(id).all();const refunds=await env.COMMERCE_DB.prepare('SELECT * FROM refunds WHERE order_id=? ORDER BY created_at DESC').bind(id).all();return{order,items:items.results||[],fulfillments:groups.results||[],shipments:shipments.results||[],attempts:attempts.results||[],refunds:refunds.results||[]};}
