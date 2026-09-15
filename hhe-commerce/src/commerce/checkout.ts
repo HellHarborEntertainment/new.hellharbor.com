@@ -4,7 +4,7 @@ import { bytesToHex,hmacSha256,randomId,sha256Hex } from '../lib/crypto.js';
 import { createStripeCheckout } from '../stripe/client.js';
 import { audit } from '../lib/audit.js';
 interface QuoteRow{id:string;status:string;items_json:string;address_json:string;contact_json:string;provider_quotes_json:string;options_json:string;selected_option_id:string|null;order_id:string|null;expires_at:string}
-function orderNumber(){const d=new Date();const date=`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}`;return`HHE-${date}-${crypto.randomUUID().slice(0,8).toUpperCase()}`;}
+function orderNumber(){const d=new Date();const date=`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}`;return`HHE-${date}-${crypto.randomUUID().replaceAll('-','').slice(0,16).toUpperCase()}`;}
 async function orderAccessToken(env:Env,orderId:string):Promise<string>{if(!env.ORDER_ACCESS_SECRET||env.ORDER_ACCESS_SECRET.length<32)throw upstream('Order access token secret is not configured');return`access_${bytesToHex(await hmacSha256(`hhe-order-access:${orderId}`,env.ORDER_ACCESS_SECRET))}`;}
 export async function createCheckout(env:Env,quoteId:string,optionId:string){
  const quote=await env.COMMERCE_DB.prepare('SELECT * FROM shipping_quotes WHERE id=?').bind(quoteId).first<QuoteRow>();if(!quote)throw notFound('Shipping quote not found');
