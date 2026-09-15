@@ -1,73 +1,18 @@
-import type { FulfillmentProvider, FulfillmentInput, FulfillmentResult, ShipmentResult } from './types.js';
-import type { Address, CatalogItem, Contact, Env, ProviderQuote } from '../types.js';
+import type { FulfillmentProvider,FulfillmentInput,FulfillmentResult,ShipmentResult } from './types.js';
+import type { Address,CatalogItem,Contact,Env,ProviderQuote } from '../types.js';
 import { upstream } from '../lib/errors.js';
-import { parseDays, xmlBlocks, xmlText } from '../lib/xml.js';
+import { parseDays,xmlBlocks,xmlText } from '../lib/xml.js';
 import { inferTier } from './types.js';
 
-function kunakiCountry(country: string): string {
-  const c = country.toUpperCase();
-  return c === 'US' || c === 'USA' ? 'United States' : c === 'CA' ? 'Canada' : country;
-}
+function kunakiCountry(country:string):string{const c=country.toUpperCase();return c==='US'||c==='USA'?'United States':c==='CA'?'Canada':country;}
+function escapeXml(value:unknown):string{return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');}
+function tag(name:string,value:unknown):string{return`<${name}>${escapeXml(value)}</${name}>`;}
+function productsXml(items:CatalogItem[]):string{return items.map(item=>{if(!item.providerProductId)throw upstream(`Kunaki provider product id missing for ${item.sku}`);return`<Product>${tag('ProductId',item.providerProductId)}${tag('Quantity',item.quantity)}</Product>`;}).join('');}
+async function requestXml(env:Env,xml:string):Promise<string>{const endpoint=env.KUNAKI_XML_BASE_URL||'https://Kunaki.com/XMLService.ASP';const response=await fetch(endpoint,{method:'POST',signal:AbortSignal.timeout(20_000),headers:{'content-type':'application/xml; charset=utf-8','accept':'application/xml,text/xml'},body:xml});const text=await response.text();if(text.length>1_000_000)throw upstream('Kunaki response exceeded safe size');if(!response.ok)throw upstream(`Kunaki HTTP ${response.status}`);const errorCode=xmlText(text,'ErrorCode');if(errorCode&&errorCode!=='0')throw upstream(`Kunaki API error ${errorCode}: ${xmlText(text,'ErrorText')||'Unknown error'}`);return text;}
 
-function escapeXml(value: unknown): string {
-  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
-}
-function tag(name: string, value: unknown): string { return `<${name}>${escapeXml(value)}</${name}>`; }
-function productsXml(items: CatalogItem[]): string {
-  return items.map(item => {
-    if (!item.providerProductId) throw upstream(`Kunaki provider product id missing for ${item.sku}`);
-    return `<Product>${tag('ProductId', item.providerProductId)}${tag('Quantity', item.quantity)}</Product>`;
-  }).join('');
-}
-
-async function requestXml(env: Env, xml: string): Promise<string> {
-  const endpoint = env.KUNAKI_XML_BASE_URL || 'https://Kunaki.com/XMLService.ASP';
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/xml; charset=utf-8', 'accept': 'application/xml,text/xml' },
-    body: xml
-  });
-  const text = await response.text();
-  if (!response.ok) throw upstream(`Kunaki HTTP ${response.status}`);
-  const errorCode = xmlText(text, 'ErrorCode');
-  if (errorCode && errorCode !== '0') throw upstream(`Kunaki API error ${errorCode}: ${xmlText(text, 'ErrorText') || 'Unknown error'}`);
-  return text;
-}
-
-export const kunakiProvider: FulfillmentProvider = {
-  name: 'kunaki',
-  async quoteShipping(env: Env, args: { quoteId: string; items: CatalogItem[]; address: Address; contact: Contact }): Promise<ProviderQuote> {
-    const xml = `<ShippingOptions>${tag('Country', kunakiCountry(args.address.country))}${tag('State_Province', args.address.state || '')}${tag('PostalCode', args.address.postalCode)}${productsXml(args.items)}</ShippingOptions>`;
-    const response = await requestXml(env, xml);
-    const options = xmlBlocks(response, 'Option').map((block, index) => {
-      const name = xmlText(block, 'Description') || `Kunaki shipping ${index + 1}`;
-      const price = Math.round(Number(xmlText(block, 'Price') || '0') * 100);
-      const days = parseDays(xmlText(block, 'DeliveryTime'));
-      return { provider: 'kunaki' as const, id: name, name, price, currency: env.CURRENCY.toLowerCase(), ...days, tierHint: inferTier({ name, maxDays: days.maxDays }) };
-    }).filter(option => Number.isFinite(option.price) && option.price >= 0);
-    if (!options.length) throw upstream('Kunaki returned no shipping options');
-    return { provider: 'kunaki', options };
-  },
-
-  async fulfill(env: Env, input: FulfillmentInput): Promise<FulfillmentResult> {
-    const a = input.address;
-    const xml = `<Order>${tag('UserId', env.KUNAKI_USER_ID)}${tag('Password', env.KUNAKI_PASSWORD)}${tag('Mode', env.KUNAKI_MODE)}${tag('Name', `${a.firstName} ${a.lastName}`.trim())}${tag('Company', a.company || '')}${tag('Address1', a.address1)}${tag('Address2', a.address2 || '')}${tag('City', a.city)}${tag('State_Province', a.state || '')}${tag('PostalCode', a.postalCode)}${tag('Country', kunakiCountry(a.country))}${tag('ShippingDescription', input.shippingSelection.name)}${productsXml(input.items)}</Order>`;
-    const response = await requestXml(env, xml);
-    const orderId = xmlText(response, 'OrderId');
-    if (!orderId) throw upstream('Kunaki did not return an OrderId');
-    return { providerOrderId: orderId, status: 'submitted', raw: { orderId } };
-  },
-
-  async getStatus(env: Env, providerOrderId: string) {
-    const xml = `<OrderStatus>${tag('UserId', env.KUNAKI_USER_ID)}${tag('Password', env.KUNAKI_PASSWORD)}${tag('OrderId', providerOrderId)}</OrderStatus>`;
-    const response = await requestXml(env, xml);
-    return { status: (xmlText(response, 'OrderStatus') || 'unknown').toLowerCase(), raw: { trackingType: xmlText(response, 'TrackingType'), trackingId: xmlText(response, 'TrackingId') } };
-  },
-
-  async getShipments(env: Env, providerOrderId: string): Promise<ShipmentResult[]> {
-    const status = await this.getStatus(env, providerOrderId);
-    const raw = status.raw as { trackingType?: string; trackingId?: string };
-    if (!raw.trackingId || raw.trackingId === 'NA') return [];
-    return [{ id: `${providerOrderId}:${raw.trackingId}`, carrier: raw.trackingType === 'NA' ? undefined : raw.trackingType, trackingNumber: raw.trackingId, status: status.status, raw }];
-  }
+export const kunakiProvider:FulfillmentProvider={name:'kunaki',
+ async quoteShipping(env,args:{quoteId:string;items:CatalogItem[];address:Address;contact:Contact}):Promise<ProviderQuote>{const xml=`<ShippingOptions>${tag('Country',kunakiCountry(args.address.country))}${tag('State_Province',args.address.state||'')}${tag('PostalCode',args.address.postalCode)}${productsXml(args.items)}</ShippingOptions>`,response=await requestXml(env,xml);const options=xmlBlocks(response,'Option').map((block,index)=>{const name=xmlText(block,'Description')||`Kunaki shipping ${index+1}`,price=Math.round(Number(xmlText(block,'Price')||'0')*100),days=parseDays(xmlText(block,'DeliveryTime'));return{provider:'kunaki' as const,id:name,name,price,currency:env.CURRENCY.toLowerCase(),...days,tierHint:inferTier({name,maxDays:days.maxDays})};}).filter(option=>Number.isSafeInteger(option.price)&&option.price>=0);if(!options.length)throw upstream('Kunaki returned no shipping options');return{provider:'kunaki',options};},
+ async fulfill(env,input:FulfillmentInput):Promise<FulfillmentResult>{const a=input.address,xml=`<Order>${tag('UserId',env.KUNAKI_USER_ID)}${tag('Password',env.KUNAKI_PASSWORD)}${tag('Mode',env.KUNAKI_MODE)}${tag('Name',`${a.firstName} ${a.lastName}`.trim())}${tag('Company',a.company||'')}${tag('Address1',a.address1)}${tag('Address2',a.address2||'')}${tag('City',a.city)}${tag('State_Province',a.state||'')}${tag('PostalCode',a.postalCode)}${tag('Country',kunakiCountry(a.country))}${tag('ShippingDescription',input.shippingSelection.name)}${productsXml(input.items)}</Order>`,response=await requestXml(env,xml),orderId=xmlText(response,'OrderId');if(!orderId||orderId.length>250)throw upstream('Kunaki did not return a valid OrderId');return{providerOrderId:orderId,status:'submitted',raw:{orderId}};},
+ async getStatus(env,providerOrderId){const xml=`<OrderStatus>${tag('UserId',env.KUNAKI_USER_ID)}${tag('Password',env.KUNAKI_PASSWORD)}${tag('OrderId',providerOrderId)}</OrderStatus>`,response=await requestXml(env,xml);return{status:(xmlText(response,'OrderStatus')||'unknown').toLowerCase(),raw:{trackingType:xmlText(response,'TrackingType'),trackingId:xmlText(response,'TrackingId')}};},
+ async getShipments(env,providerOrderId):Promise<ShipmentResult[]>{const status=await this.getStatus(env,providerOrderId),raw=status.raw as {trackingType?:string;trackingId?:string};if(!raw.trackingId||raw.trackingId==='NA')return[];return[{id:`${providerOrderId}:${raw.trackingId}`,carrier:raw.trackingType==='NA'?undefined:raw.trackingType,trackingNumber:raw.trackingId,status:status.status,raw}];}
 };
