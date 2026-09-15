@@ -19,12 +19,12 @@ export interface Env {
   KUNAKI_USER_ID: string;
   KUNAKI_PASSWORD: string;
   KUNAKI_MODE: 'TEST' | 'LIVE';
-  KUNAKI_BASE_URL: string;
   KUNAKI_XML_BASE_URL?: string;
   ALLOWED_ORIGINS: string;
   CURRENCY: string;
   QUOTE_TTL_MINUTES: string;
   ADMIN_API_KEY: string;
+  ORDER_ACCESS_SECRET: string;
   FREE_SHIPPING_THRESHOLD_CENTS?: string;
   SHIPPING_SUBSIDY_CENTS?: string;
   SHIPPING_MARKUP_BPS?: string;
