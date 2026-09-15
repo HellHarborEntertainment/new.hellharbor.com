@@ -1,4 +1,4 @@
-interface D1Result<T = unknown> { results?: T[]; success: boolean; meta?: unknown; error?: string; }
+interface D1Result<T = unknown> { results?: T[]; success: boolean; meta?: { changes?: number; [key: string]: unknown }; error?: string; }
 interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
   first<T = unknown>(column?: string): Promise<T | null>;
@@ -14,3 +14,4 @@ interface MessageBatch<T = unknown> { messages: Message<T>[]; queue: string; }
 interface Queue<T = unknown> { send(message: T, options?: { delaySeconds?: number }): Promise<void>; }
 interface ScheduledController { scheduledTime: number; cron: string; }
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
+interface RateLimit { limit(options: { key: string }): Promise<{ success: boolean }> }

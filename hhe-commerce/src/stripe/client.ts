@@ -1,45 +1,8 @@
-import type { Env } from '../types.js';
+import type { Address,Env } from '../types.js';
 import { upstream } from '../lib/errors.js';
-
-export interface CheckoutLine { name: string; sku: string; unitAmount: number; quantity: number; currency: string; }
-export interface CheckoutCreateInput {
-  orderId: string; orderNumber: string; publicToken: string; email: string; lines: CheckoutLine[];
-  shipping: { name: string; amount: number; currency: string; minDays?: number; maxDays?: number };
-  expiresAtEpoch?: number;
-}
-
-export async function createStripeCheckout(env: Env, input: CheckoutCreateInput): Promise<{ id: string; url?: string }> {
-  const p = new URLSearchParams();
-  p.set('mode', 'payment');
-  p.set('customer_email', input.email);
-  p.set('client_reference_id', input.orderId);
-  p.set('success_url', `${env.STRIPE_SUCCESS_URL}${env.STRIPE_SUCCESS_URL.includes('?') ? '&' : '?'}order=${encodeURIComponent(input.orderNumber)}&token=${encodeURIComponent(input.publicToken)}&session_id={CHECKOUT_SESSION_ID}`);
-  p.set('cancel_url', env.STRIPE_CANCEL_URL);
-  p.set('automatic_tax[enabled]', 'true');
-  if (input.expiresAtEpoch) p.set('expires_at', String(input.expiresAtEpoch));
-  p.set('metadata[order_id]', input.orderId);
-  p.set('metadata[order_number]', input.orderNumber);
-  input.lines.forEach((line, i) => {
-    p.set(`line_items[${i}][quantity]`, String(line.quantity));
-    p.set(`line_items[${i}][price_data][currency]`, line.currency);
-    p.set(`line_items[${i}][price_data][unit_amount]`, String(line.unitAmount));
-    p.set(`line_items[${i}][price_data][tax_behavior]`, 'exclusive');
-    p.set(`line_items[${i}][price_data][product_data][name]`, line.name);
-    p.set(`line_items[${i}][price_data][product_data][metadata][sku]`, line.sku);
-  });
-  p.set('shipping_options[0][shipping_rate_data][type]', 'fixed_amount');
-  p.set('shipping_options[0][shipping_rate_data][display_name]', input.shipping.name);
-  p.set('shipping_options[0][shipping_rate_data][fixed_amount][amount]', String(input.shipping.amount));
-  p.set('shipping_options[0][shipping_rate_data][fixed_amount][currency]', input.shipping.currency);
-  p.set('shipping_options[0][shipping_rate_data][tax_behavior]', 'exclusive');
-  if (input.shipping.minDays) p.set('shipping_options[0][shipping_rate_data][delivery_estimate][minimum][unit]', 'business_day');
-  if (input.shipping.minDays) p.set('shipping_options[0][shipping_rate_data][delivery_estimate][minimum][value]', String(input.shipping.minDays));
-  if (input.shipping.maxDays) p.set('shipping_options[0][shipping_rate_data][delivery_estimate][maximum][unit]', 'business_day');
-  if (input.shipping.maxDays) p.set('shipping_options[0][shipping_rate_data][delivery_estimate][maximum][value]', String(input.shipping.maxDays));
-  const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
-    method: 'POST', headers: { authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, 'content-type': 'application/x-www-form-urlencoded' }, body: p.toString()
-  });
-  const body = await res.json() as Record<string, unknown>;
-  if (!res.ok) throw upstream('Stripe Checkout session creation failed', body);
-  return { id: String(body.id), url: body.url ? String(body.url) : undefined };
-}
+export interface CheckoutLine{name:string;sku:string;unitAmount:number;quantity:number;currency:string}
+export interface CheckoutCreateInput{orderId:string;orderNumber:string;publicToken:string;email:string;address:Address;lines:CheckoutLine[];shipping:{name:string;amount:number;currency:string;minDays?:number;maxDays?:number};expiresAtEpoch?:number;}
+export async function createStripeCheckout(env:Env,input:CheckoutCreateInput):Promise<{id:string;url?:string}>{const p=new URLSearchParams();p.set('mode','payment');p.set('customer_email',input.email);p.set('client_reference_id',input.orderId);p.set('success_url',`${env.STRIPE_SUCCESS_URL}${env.STRIPE_SUCCESS_URL.includes('?')?'&':'?'}order=${encodeURIComponent(input.orderNumber)}&token=${encodeURIComponent(input.publicToken)}&session_id={CHECKOUT_SESSION_ID}`);p.set('cancel_url',env.STRIPE_CANCEL_URL);p.set('automatic_tax[enabled]','true');p.set('billing_address_collection','auto');p.set('phone_number_collection[enabled]','true');p.set('shipping_address_collection[allowed_countries][0]',input.address.country.toUpperCase());if(input.expiresAtEpoch)p.set('expires_at',String(input.expiresAtEpoch));p.set('metadata[order_id]',input.orderId);p.set('metadata[order_number]',input.orderNumber);p.set('payment_intent_data[metadata][hhe_order_id]',input.orderId);p.set('payment_intent_data[metadata][hhe_order_number]',input.orderNumber);
+ input.lines.forEach((line,i)=>{p.set(`line_items[${i}][quantity]`,String(line.quantity));p.set(`line_items[${i}][price_data][currency]`,line.currency);p.set(`line_items[${i}][price_data][unit_amount]`,String(line.unitAmount));p.set(`line_items[${i}][price_data][tax_behavior]`,'exclusive');p.set(`line_items[${i}][price_data][product_data][name]`,line.name);p.set(`line_items[${i}][price_data][product_data][metadata][sku]`,line.sku);});
+ p.set('shipping_options[0][shipping_rate_data][type]','fixed_amount');p.set('shipping_options[0][shipping_rate_data][display_name]',input.shipping.name);p.set('shipping_options[0][shipping_rate_data][fixed_amount][amount]',String(input.shipping.amount));p.set('shipping_options[0][shipping_rate_data][fixed_amount][currency]',input.shipping.currency);p.set('shipping_options[0][shipping_rate_data][tax_behavior]','exclusive');if(input.shipping.minDays){p.set('shipping_options[0][shipping_rate_data][delivery_estimate][minimum][unit]','business_day');p.set('shipping_options[0][shipping_rate_data][delivery_estimate][minimum][value]',String(input.shipping.minDays));}if(input.shipping.maxDays){p.set('shipping_options[0][shipping_rate_data][delivery_estimate][maximum][unit]','business_day');p.set('shipping_options[0][shipping_rate_data][delivery_estimate][maximum][value]',String(input.shipping.maxDays));}
+ const res=await fetch('https://api.stripe.com/v1/checkout/sessions',{method:'POST',headers:{authorization:`Bearer ${env.STRIPE_SECRET_KEY}`,'content-type':'application/x-www-form-urlencoded','Idempotency-Key':`hhe-checkout-${input.orderId}`},body:p.toString()});const body=await res.json() as Record<string,unknown>;if(!res.ok)throw upstream('Stripe Checkout session creation failed',body);return{id:String(body.id),url:body.url?String(body.url):undefined};}

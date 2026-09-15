@@ -1,15 +1,18 @@
 export type ProviderName = 'kunaki' | 'spreadconnect' | 'in_house';
 export type ShippingTier = 'economy' | 'standard' | 'express';
-export type OrderStatus = 'pending_payment' | 'paid' | 'payment_failed' | 'cancelled' | 'complete' | 'exception';
+export type OrderStatus = 'pending_payment' | 'paid' | 'payment_failed' | 'expired' | 'cancelled' | 'complete' | 'exception';
 export type FulfillmentStatus = 'unfulfilled' | 'queued' | 'submitted' | 'processing' | 'partially_shipped' | 'shipped' | 'partially_delivered' | 'delivered' | 'exception' | 'cancelled';
 
 export interface Env {
   COMMERCE_DB: D1Database;
   FULFILLMENT_QUEUE: Queue<FulfillmentMessage>;
+  PUBLIC_RATE_LIMITER: RateLimit;
+  ADMIN_RATE_LIMITER: RateLimit;
   STRIPE_SECRET_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
   STRIPE_SUCCESS_URL: string;
   STRIPE_CANCEL_URL: string;
+  STRIPE_ALLOWED_SHIPPING_COUNTRIES: string;
   SPREADCONNECT_ACCESS_TOKEN: string;
   SPREADCONNECT_WEBHOOK_SECRET?: string;
   SPREADCONNECT_BASE_URL: string;
@@ -21,6 +24,10 @@ export interface Env {
   CURRENCY: string;
   QUOTE_TTL_MINUTES: string;
   ADMIN_API_KEY: string;
+  FREE_SHIPPING_THRESHOLD_CENTS?: string;
+  SHIPPING_SUBSIDY_CENTS?: string;
+  SHIPPING_MARKUP_BPS?: string;
+  MIN_SHIPPING_CHARGE_CENTS?: string;
 }
 
 export interface Address {
@@ -75,10 +82,18 @@ export interface HheShippingOption {
   id: ShippingTier;
   name: string;
   price: number;
+  actualProviderCost: number;
   currency: string;
   minDays?: number;
   maxDays?: number;
   providerSelections: Record<string, { optionId: string; name: string; price: number; metadata?: Record<string, unknown> }>;
+}
+
+export interface ShippingPolicy {
+  freeShippingThresholdCents: number;
+  shippingSubsidyCents: number;
+  shippingMarkupBps: number;
+  minShippingChargeCents: number;
 }
 
 export interface FulfillmentMessage {

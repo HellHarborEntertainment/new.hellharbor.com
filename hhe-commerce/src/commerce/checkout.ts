@@ -1,45 +1,20 @@
-import type { Env, HheShippingOption } from '../types.js';
-import { badRequest, conflict, notFound } from '../lib/errors.js';
+import type { Address,Env,HheShippingOption } from '../types.js';
+import { badRequest,conflict,notFound } from '../lib/errors.js';
 import { randomId } from '../lib/crypto.js';
 import { createStripeCheckout } from '../stripe/client.js';
-
-interface QuoteRow { id: string; status: string; items_json: string; address_json: string; contact_json: string; provider_quotes_json: string; options_json: string; expires_at: string; }
-
-function orderNumber(): string {
-  const d = new Date();
-  const date = `${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}`;
-  return `HHE-${date}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+import { audit } from '../lib/audit.js';
+interface QuoteRow{id:string;status:string;items_json:string;address_json:string;contact_json:string;provider_quotes_json:string;options_json:string;selected_option_id:string|null;order_id:string|null;expires_at:string}
+function orderNumber(){const d=new Date();const date=`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}`;return`HHE-${date}-${crypto.randomUUID().slice(0,8).toUpperCase()}`;}
+export async function createCheckout(env:Env,quoteId:string,optionId:string){
+ const quote=await env.COMMERCE_DB.prepare('SELECT * FROM shipping_quotes WHERE id=?').bind(quoteId).first<QuoteRow>();if(!quote)throw notFound('Shipping quote not found');if(Date.parse(quote.expires_at)<=Date.now())throw conflict('Shipping quote has expired');
+ if(quote.status==='reserved'&&quote.order_id){const existing=await env.COMMERCE_DB.prepare('SELECT id,order_number,public_token,shipping_option_id,stripe_checkout_session_id,stripe_checkout_url FROM orders WHERE id=?').bind(quote.order_id).first<{id:string;order_number:string;public_token:string;shipping_option_id:string;stripe_checkout_session_id:string|null;stripe_checkout_url:string|null}>();if(!existing)throw conflict('Reserved quote is missing its order');if(existing.shipping_option_id!==optionId)throw conflict('Shipping quote is already reserved with another option');if(existing.stripe_checkout_session_id)return{orderNumber:existing.order_number,publicToken:existing.public_token,checkoutSessionId:existing.stripe_checkout_session_id,checkoutUrl:existing.stripe_checkout_url,reused:true};return resumeStripe(env,quote,existing.id,existing.order_number,existing.public_token,optionId);}
+ if(quote.status!=='open')throw conflict('Shipping quote is no longer available');
+ const items=JSON.parse(quote.items_json) as Array<any>;const contact=JSON.parse(quote.contact_json) as {email:string;phone:string};const options=JSON.parse(quote.options_json) as HheShippingOption[];const selected=options.find(o=>o.id===optionId);if(!selected)throw badRequest('Unknown shipping option');
+ const subtotal=items.reduce((s:number,i:any)=>s+i.unitPrice*i.quantity,0);const id=randomId('ord'),number=orderNumber(),token=randomId('access'),now=new Date().toISOString();
+ const statements:D1PreparedStatement[]=[env.COMMERCE_DB.prepare(`INSERT INTO orders (id,order_number,public_token,customer_email,customer_phone,status,payment_status,fulfillment_status,currency,subtotal,shipping_total,tax_total,grand_total,shipping_quote_id,shipping_option_id,address_json,created_at,updated_at) VALUES (?, ?, ?, ?, ?, 'pending_payment', 'unpaid', 'unfulfilled', ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`).bind(id,number,token,contact.email,contact.phone,items[0]?.currency||env.CURRENCY,subtotal,selected.price,subtotal+selected.price,quoteId,selected.id,quote.address_json,now,now)];
+ for(const i of items)statements.push(env.COMMERCE_DB.prepare(`INSERT INTO order_items (id,order_id,product_id,variant_id,sku,name,quantity,unit_price,provider,provider_product_id,provider_sku) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(randomId('item'),id,i.productId,i.variantId,i.sku,`${i.productName}${i.variantName?` - ${i.variantName}`:''}`,i.quantity,i.unitPrice,i.provider,i.providerProductId||null,i.providerSku||null));
+ statements.push(env.COMMERCE_DB.prepare(`UPDATE shipping_quotes SET status='reserved',selected_option_id=?,order_id=? WHERE id=? AND status='open'`).bind(selected.id,id,quoteId));
+ try{await env.COMMERCE_DB.batch(statements);}catch(error){const raced=await env.COMMERCE_DB.prepare('SELECT order_id FROM shipping_quotes WHERE id=?').bind(quoteId).first<{order_id:string|null}>();if(raced?.order_id)return createCheckout(env,quoteId,optionId);throw error;}
+ await audit(env,{actorType:'customer',action:'checkout.reserved',entityType:'order',entityId:id,metadata:{quoteId,shippingOptionId:optionId}});return resumeStripe(env,{...quote,status:'reserved',order_id:id,selected_option_id:optionId},id,number,token,optionId);
 }
-
-export async function createCheckout(env: Env, quoteId: string, optionId: string) {
-  const quote = await env.COMMERCE_DB.prepare('SELECT * FROM shipping_quotes WHERE id = ?').bind(quoteId).first<QuoteRow>();
-  if (!quote) throw notFound('Shipping quote not found');
-  if (quote.status !== 'open') throw conflict('Shipping quote is no longer available');
-  if (Date.parse(quote.expires_at) <= Date.now()) throw conflict('Shipping quote has expired');
-  const items = JSON.parse(quote.items_json) as Array<{ productId: string; variantId: string; sku: string; productName: string; variantName?: string; provider: string; providerProductId?: string; providerSku?: string; unitPrice: number; currency: string; quantity: number }>;
-  const contact = JSON.parse(quote.contact_json) as { email: string; phone: string };
-  const options = JSON.parse(quote.options_json) as HheShippingOption[];
-  const selected = options.find(o => o.id === optionId);
-  if (!selected) throw badRequest('Unknown shipping option');
-  const subtotal = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
-  const id = randomId('ord'); const number = orderNumber(); const token = randomId('access'); const now = new Date().toISOString();
-  await env.COMMERCE_DB.prepare(`
-    INSERT INTO orders (id, order_number, public_token, customer_email, customer_phone, status, payment_status, fulfillment_status,
-      currency, subtotal, shipping_total, tax_total, grand_total, shipping_quote_id, shipping_option_id, address_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'pending_payment', 'unpaid', 'unfulfilled', ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
-  `).bind(id, number, token, contact.email, contact.phone, items[0]?.currency || env.CURRENCY, subtotal, selected.price, subtotal + selected.price, quoteId, selected.id, quote.address_json, now, now).run();
-  const statements = items.map(i => env.COMMERCE_DB.prepare(`
-    INSERT INTO order_items (id, order_id, product_id, variant_id, sku, name, quantity, unit_price, provider, provider_product_id, provider_sku)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(randomId('item'), id, i.productId, i.variantId, i.sku, `${i.productName}${i.variantName ? ` - ${i.variantName}` : ''}`, i.quantity, i.unitPrice, i.provider, i.providerProductId || null, i.providerSku || null));
-  if (statements.length) await env.COMMERCE_DB.batch(statements);
-  const session = await createStripeCheckout(env, {
-    orderId: id, orderNumber: number, publicToken: token, email: contact.email,
-    lines: items.map(i => ({ name: `${i.productName}${i.variantName ? ` - ${i.variantName}` : ''}`, sku: i.sku, unitAmount: i.unitPrice, quantity: i.quantity, currency: i.currency })),
-    shipping: { name: selected.name, amount: selected.price, currency: selected.currency, minDays: selected.minDays, maxDays: selected.maxDays },
-    expiresAtEpoch: Math.floor(Date.parse(quote.expires_at) / 1000)
-  });
-  await env.COMMERCE_DB.prepare(`UPDATE orders SET stripe_checkout_session_id = ?, updated_at = ? WHERE id = ?`).bind(session.id, new Date().toISOString(), id).run();
-  await env.COMMERCE_DB.prepare(`UPDATE shipping_quotes SET status = 'reserved', selected_option_id = ?, order_id = ? WHERE id = ? AND status = 'open'`).bind(selected.id, id, quoteId).run();
-  return { orderNumber: number, publicToken: token, checkoutSessionId: session.id, checkoutUrl: session.url };
-}
+async function resumeStripe(env:Env,quote:QuoteRow,orderId:string,number:string,token:string,optionId:string){const items=JSON.parse(quote.items_json) as Array<any>;const contact=JSON.parse(quote.contact_json) as {email:string;phone:string};const address=JSON.parse(quote.address_json) as Address;const options=JSON.parse(quote.options_json) as HheShippingOption[];const selected=options.find(o=>o.id===optionId);if(!selected)throw badRequest('Unknown shipping option');try{const session=await createStripeCheckout(env,{orderId,orderNumber:number,publicToken:token,email:contact.email,address,lines:items.map((i:any)=>({name:`${i.productName}${i.variantName?` - ${i.variantName}`:''}`,sku:i.sku,unitAmount:i.unitPrice,quantity:i.quantity,currency:i.currency})),shipping:{name:selected.name,amount:selected.price,currency:selected.currency,minDays:selected.minDays,maxDays:selected.maxDays},expiresAtEpoch:Math.floor(Date.parse(quote.expires_at)/1000)});await env.COMMERCE_DB.prepare('UPDATE orders SET stripe_checkout_session_id=?,stripe_checkout_url=?,updated_at=? WHERE id=?').bind(session.id,session.url||null,new Date().toISOString(),orderId).run();return{orderNumber:number,publicToken:token,checkoutSessionId:session.id,checkoutUrl:session.url};}catch(error){await env.COMMERCE_DB.prepare(`UPDATE orders SET exception_code='stripe_session_create_failed',exception_detail=?,updated_at=? WHERE id=?`).bind(String(error).slice(0,2000),new Date().toISOString(),orderId).run();throw error;}}

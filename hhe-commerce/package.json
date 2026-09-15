@@ -1,6 +1,6 @@
 {
   "name": "@hellharbor/hhe-commerce",
-  "version": "0.1.0",
+  "version": "0.2.0-rc1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,8 +12,5 @@
     "db:migrate:local": "wrangler d1 migrations apply hhe-commerce --local",
     "db:migrate:remote": "wrangler d1 migrations apply hhe-commerce --remote"
   },
-  "devDependencies": {
-    "typescript": "^5.8.3",
-    "wrangler": "^4.0.0"
-  }
+  "devDependencies": { "typescript": "^5.8.3", "wrangler": "^4.36.0" }
 }
