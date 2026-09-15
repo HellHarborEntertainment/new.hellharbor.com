@@ -1,6 +1,6 @@
 {
   "name": "@hellharbor/hhe-commerce",
-  "version": "0.2.1-rc1.1",
+  "version": "0.2.2-rc1.2",
   "private": true,
   "type": "module",
   "scripts": {
