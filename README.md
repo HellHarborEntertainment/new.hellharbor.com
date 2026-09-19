@@ -11,6 +11,20 @@ Canonical source for the Hell Harbor Entertainment website.
 
 Public claims about availability, rosters, events, licensing, or support should be updated in the registry before being repeated in a page.
 
+## Confirmed operating facts
+
+- Dab & Stab Records began in 2018; Hell Harbor Entertainment became the parent company in 2020.
+- The public location is Grays Harbor County, Washington.
+- Dab & Stab Records, Infamous Development Studios, and Mystic Mirage Motion are active divisions.
+- Hell Harbor Publishing is in development.
+- Badass Backyard Wrestling is an active HHE project.
+- Talent management covers HHE-owned talent, while distribution supports internal releases.
+- Selected outside production work is available by inquiry.
+- Ko-fi and Spreadshop are the official commerce providers.
+- Paid music features are currently limited to JesterTheRyda.
+- RydaGangProd beats are available by inquiry.
+- Ticketleap is the official ticket provider; ticket classes are event-specific.
+
 ## Runtime
 
 A clean full-stack starter running on

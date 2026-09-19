@@ -19,7 +19,7 @@ export const houses = [
     mark: "IDS",
     name: "Infamous Development Studios",
     type: "Games and software",
-    status: "By inquiry",
+    status: "Active",
     copy: "Interactive systems, roleplay experiences, private servers, and experimental software projects.",
     href: "https://infamousdevstudios.com",
   },
@@ -27,7 +27,7 @@ export const houses = [
     mark: "MMM",
     name: "Mystic Mirage Motion",
     type: "Film and television",
-    status: "In development",
+    status: "Active",
     copy: "The screen-production identity for film, television, and visual storytelling projects.",
     href: "/contact",
   },
@@ -60,6 +60,14 @@ export const publicContacts = [
     ],
   },
   {
+    group: "Screen & Voice",
+    code: "PERFORMANCE",
+    entries: [
+      ["Screen Acting Bookings", "screenbookings@HellHarbor.com"],
+      ["Voice Acting Bookings", "voicebookings@HellHarbor.com"],
+    ],
+  },
+  {
     group: "Production & Support",
     code: "PRODUCTION",
     entries: [
@@ -75,10 +83,13 @@ export const featureArtists = [
     role: "Current DNSR solo artist",
     availability: "Availability confirmed before purchase",
   },
+] as const;
+
+export const activeProjects = [
   {
-    name: "Funky Skunky",
-    role: "Jester-led collaborative group project",
-    availability: "Project features available by inquiry",
+    name: "Badass Backyard Wrestling",
+    type: "Sports entertainment",
+    status: "Active",
   },
 ] as const;
 

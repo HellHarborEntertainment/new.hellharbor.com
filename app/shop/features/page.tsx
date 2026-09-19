@@ -30,7 +30,7 @@ export default function FeaturesPage() {
         <div className="feature-roster">
           {featureArtists.map((artist, index) => <article key={artist.name}><div><span>OPTION 0{index + 1}</span><h2>{artist.name}</h2><small>{artist.role}</small></div><div><a href="mailto:booking@DabNStabRecords.com">{artist.availability}<i>↗</i></a></div></article>)}
         </div>
-        <p className="transaction-note">Poltergyst is preserved in the DNSR alumni archive and is not listed as a currently available feature artist.</p>
+        <p className="transaction-note">JesterTheRyda is the only artist currently available for paid music features. Funky Skunky remains an active Jester-led group project but is not listed as a separate paid feature option. Poltergyst is preserved in the DNSR alumni archive.</p>
       </section>
       <section className="portal-callout"><span>NEED A CUSTOM ARRANGEMENT?</span><h2>Open a direct line with the booking department before purchase.</h2><a href="mailto:booking@DabNStabRecords.com">CONTACT BOOKING <i>↗</i></a></section>
     </PortalShell>

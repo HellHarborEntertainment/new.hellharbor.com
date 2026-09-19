@@ -5,13 +5,13 @@ import Image from "next/image";
 import { eventStatus, houses } from "./content/brand-registry";
 
 const divisions = [
-  { numeral: "I", title: "Talent & Booking", copy: "Representation, career guidance, performance negotiations and the machinery that moves talent from rehearsal to the world." },
+  { numeral: "I", title: "Talent & Booking", copy: "Management and booking support for artists, actors, voices, and projects within the Hell Harbor family." },
   { numeral: "II", title: "Music & Records", copy: "Recording, artist development and distribution through the rebellious bloodline that began with Dab & Stab Records." },
-  { numeral: "III", title: "Film & Television", copy: "Original motion pictures, episodic worlds, voice work and visual storytelling built to linger after the credits." },
-  { numeral: "IV", title: "Games & Software", copy: "Immersive worlds, roleplay systems and digital experiences engineered by Infamous Development Studios." },
-  { numeral: "V", title: "Publishing", copy: "Books, comics, lore archives and written universes shaped for print, screen and whatever comes crawling next." },
-  { numeral: "VI", title: "Distribution", copy: "Campaigns, releases and direct-to-audience channels that carry finished work beyond the walls of the Harbor." },
-  { numeral: "VII", title: "Live Entertainment", copy: "Touring, ticketed appearances and independent sports entertainment made for a crowd that wants something raw." },
+  { numeral: "III", title: "Film & Television", copy: "Active film, television, voice, and visual-storytelling development through Mystic Mirage Motion." },
+  { numeral: "IV", title: "Games & Software", copy: "Active interactive systems, roleplay experiences, private servers, and software work through Infamous Development Studios." },
+  { numeral: "V", title: "Publishing · In Development", copy: "The planned home for books, comics, production documents, and original written worlds." },
+  { numeral: "VI", title: "Distribution", copy: "Release and campaign support for projects produced within Hell Harbor Entertainment and Dab & Stab Records." },
+  { numeral: "VII", title: "Live Entertainment", copy: "Confirmed appearances, event production, and the active Badass Backyard Wrestling sports-entertainment project." },
 ];
 
 const shopDepartments = [
